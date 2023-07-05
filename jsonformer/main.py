@@ -1,3 +1,5 @@
+import operator
+from itertools import groupby
 from typing import List, Union, Dict, Any
 
 from jsonformer.logits_processors import (
@@ -234,33 +236,18 @@ class Jsonformer:
             element = self.generate_value(item_schema, obj)
             obj[-1] = element
 
-            obj.append(self.generation_marker)
-            input_prompt = self.get_prompt()
-            obj.pop()
-            input_tensor = self.tokenizer.encode(input_prompt, return_tensors="pt")
-            output = self.model.forward(input_tensor.to(self.model.device))
-            logits = output.logits[0, -1]
-
-
-            top_indices = logits.topk(30).indices
-            sorted_token_ids = top_indices[logits[top_indices].argsort(descending=True)]
-
-            found_comma = False
-            found_close_bracket = False
-
-            for token_id in sorted_token_ids:
-                decoded_token = self.tokenizer.decode(token_id)
-                if ',' in decoded_token:
-                    found_comma = True
-                    break
-                if ']' in decoded_token:
-                    found_close_bracket = True
-                    break
-
-            if found_close_bracket or not found_comma:
+            if len(obj) > len(self.get_unique_dicts(obj)) + 1:
                 break
 
-        return obj
+        return self.get_unique_dicts(obj)
+
+    def get_unique_dicts(self, dicts: List[dict]) -> List[dict]:
+        if len(dicts) == 0:
+            return dicts
+        key_func = operator.itemgetter(*dicts[0].keys())
+        grouped_dicts = groupby(sorted(dicts, key=key_func))
+        unique_dicts = [keys for keys, _ in grouped_dicts]
+        return unique_dicts
 
     def get_prompt(self):
         template = """{prompt}\nOutput result in the following JSON schema format:\n{schema}\nResult: {progress}"""
