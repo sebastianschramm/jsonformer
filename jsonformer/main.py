@@ -136,10 +136,16 @@ class Jsonformer:
 
         self.debug("[generate_string]", "|" + response + "|")
 
-        if response.count('"') < 1:
-            return response
+        # clean response
+        if response.count('"') > 0:
+            response = response.split('"')[0].strip()
 
-        return response.split('"')[0].strip()
+        if response:
+            self.debug("[consistency_check]", response.lower() not in self.prompt.lower())
+            if response.lower() not in self.prompt.lower():
+                response = None
+        
+        return response
 
     def generate_object(
         self, properties: Dict[str, Any], obj: Dict[str, Any]
@@ -192,7 +198,11 @@ class Jsonformer:
         for _ in range(self.max_array_length):
             # forces array to have at least one element
             element = self.generate_value(item_schema, obj)
-            obj[-1] = element
+            if element is None:
+                element.pop()
+                break
+            else:
+                obj[-1] = element
 
             if len(obj) > len(self.get_unique_dicts(obj)) + 1:
                 break
@@ -200,6 +210,7 @@ class Jsonformer:
         return self.get_unique_dicts(obj)
 
     def get_unique_dicts(self, dicts: List[dict]) -> List[dict]:
+        dicts = [it for it in dicts if None not in it.values()]
         if len(dicts) == 0:
             return dicts
         key_func = operator.itemgetter(*dicts[0].keys())
